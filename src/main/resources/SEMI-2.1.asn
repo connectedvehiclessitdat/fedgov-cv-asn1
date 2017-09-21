@@ -1,0 +1,539 @@
+-- Version: 2.1.0
+-- Date: 2014-08-12
+-- Developed by Purser Sturgeon II
+-- at Southwest Research Institute
+-- for the USDOT Connected Vehicle Test Bed
+-- 
+-- Change log:
+-- 1.0.0:	Initial version.
+-- 1.1.0:	Removed VehicleSituationServiceResponse.
+--			Updates to VSDM.
+-- 2.0.0:	Added IntersectionSituationData.
+--			Updates to ASDDistribution, ASDDeposit, VSDM, ServiceRequest. 
+--			General updates to use common nonrepudiation messages.
+-- 2.1.0:	Added IntersectionDataQuery. 
+--			Updated BIT STRINGs to OCTET STRINGs. Updates to VSDM elements. Updated IntersectionRecord to have 1 Map + 1 SPaT. 
+--			Updated max number of records/bundles per Bundle Paylod.
+--			Refactoring subscription dialog to support ISD.
+
+
+SEMI DEFINITIONS AUTOMATIC TAGS ::= BEGIN
+
+-- -_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_
+-- Common Trust Establishment Messages
+-- -_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_
+
+ServiceRequest ::= SEQUENCE {
+	dialogID	SemiDialogID,				-- dependent on dialog
+	seqID		SemiSequenceID,				-- 0x01 Service Request
+	requestID	DSRC.TemporaryID,			-- random 4 byte ID generated for trust establishment
+	destination	ConnectionPoint	OPTIONAL	-- the local IP and port that the remote system will send data to
+}
+
+ServiceResponse ::= SEQUENCE {
+	dialogID		SemiDialogID,			-- dependent on dialog
+	seqID			SemiSequenceID,			-- 0x02 Service Response
+	requestID		DSRC.TemporaryID, 		-- matches reqID in ServiceRequest
+	expiration		DSRC.DDateTime, 		-- 
+	serviceRegion	GeoRegion OPTIONAL,		-- the region applicable for this service
+	hash			Sha256Hash				-- SHA-256 hash of ServiceRequest
+}
+
+
+-- -_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_
+-- Common Nonrepudiation Messages
+-- -_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_
+
+DataConfirmation ::= SEQUENCE {
+	dialogID	SemiDialogID,				-- dependent on dialog
+	seqID		SemiSequenceID,				-- 0x04 Data Confirmation
+	requestID	DSRC.TemporaryID, 			-- matches reqID in Data Message
+	hash		Sha256Hash					-- SHA-256 hash of Data Message
+}
+
+DataAcceptance ::= SEQUENCE {
+	dialogID	SemiDialogID,				-- dependent on dialog
+	seqID		SemiSequenceID,				-- 0x06 Data Acceptance
+	requestID	DSRC.TemporaryID 			-- matches reqID in dialog
+}
+
+DataReceipt ::= SEQUENCE {
+	dialogID	SemiDialogID,				-- dependent on dialog
+	seqID		SemiSequenceID,				-- 0x07 Data Receipt
+	requestID	DSRC.TemporaryID 			-- matches reqID in dialog
+}
+
+
+-- -_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_
+-- Vehicle Situation Data Dialog
+-- -_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_
+
+-- VehicleSituationDataServiceRequest ::= ServiceRequest
+-- VehicleSituationDataServiceResponse ::= ServiceResponse
+
+VehSitDataMessage ::= SEQUENCE {
+	dialogID	SemiDialogID,								-- 0x9A Vehicle Situation Data Deposit
+	seqID		SemiSequenceID,								-- 0x05 Data Content
+	requestID	DSRC.TemporaryID,							-- random 4 byte ID generated following trust establishment
+	type		VsmType,									-- the type of vehicle situation data included
+	path		DSRC.PathHistory,							-- use PathHistoryPointType-04, up to 9 points
+	bundle 		SEQUENCE (SIZE (1..10)) OF VehSitRecord,	-- sets of situation data records
+	crc	 		DSRC.MsgCRC
+}
+
+
+-- -_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_
+-- Object Registration Service Dialog
+-- -_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_
+
+-- ObjectRegistrationDataServiceRequest ::= ServiceRequest
+-- ObjectRegistrationDataServiceResponse ::= ServiceResponse
+
+ObjectRegistrationData ::= SEQUENCE {
+	dialogID		SemiDialogID,				-- 0xA0 Object Registration
+	seqID			SemiSequenceID,				-- 0x05 Data
+	requestID		DSRC.TemporaryID,			-- random 4 byte ID generated for data transfer
+	serviceID		ServiceID,
+	serviceRecord	ServiceRecord
+}
+
+-- ObjectRegistrationDataConfirmation ::= DataConfirmation
+
+-- ObjectRegistrationDataAcceptance ::= DataAcceptance
+-- ObjectRegistrationDataReceipt ::= DataReceipt
+
+
+-- -_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_
+-- Object Discovery Service Dialog
+-- -_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_
+
+-- ObjectDiscoveryDataServiceRequest ::= ServiceRequest
+-- ObjectDiscoveryDataServiceResponse ::= ServiceResponse
+
+ObjectDiscoveryDataRequest ::= SEQUENCE {
+	dialogID		SemiDialogID,				-- 0xA1 Object Discovery
+	seqID			SemiSequenceID,				-- 0x03 Data Request
+	requestID		DSRC.TemporaryID,			-- random 4 byte ID generated for data transfer
+	serviceID		ServiceID,
+	serviceRegion	GeoRegion
+}
+
+ObjectDiscoveryData ::= SEQUENCE {
+	dialogID	SemiDialogID,				-- 0xA1 Object Discovery
+	seqID		SemiSequenceID,				-- 0x05 Data
+	requestID	DSRC.TemporaryID,			-- matches reqID in ObjectDiscoveryDataRequest
+	serviceInfo	SEQUENCE {
+		countRecords	DSRC.Count,
+		serviceRecords	SEQUENCE (SIZE(1..10)) OF ServiceRecord
+	}
+}
+
+-- ObjectDiscoveryDataAcceptance ::= DataAcceptance
+-- ObjectDiscoveryDataReceipt ::= DataReceipt
+
+
+-- -_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_
+-- Data Subscription Service Dialog (subscribing to ClearingHouse)
+-- -_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_
+
+-- DataSubscriptionServiceRequest ::= ServiceRequest
+-- DataSubscriptionServiceResponse ::= ServiceResponse
+
+DataSubscriptionRequest ::= SEQUENCE {
+	dialogID			SemiDialogID,			-- 0x9B Data Subscription
+	seqID				SemiSequenceID,			-- 0x08 Subscription Request
+	requestID			DSRC.TemporaryID,		-- random 4 byte ID generated for dialog
+	type				CHOICE {
+		vsmType			VsmType,				-- the type of vehicle situation
+												-- data being requested (see
+												-- VehSitData Message Definition)
+		isdType			IsdType					-- Intersection Situation Data
+	},
+	endTime				DSRC.DFullTime,			-- UTC date and time, to the minute,
+												-- in which the SDC should stop
+												-- sending data to the subscriber
+	serviceRegion		GeoRegion	OPTIONAL	-- The Northwest and Southeast corners of
+												-- the rectangle in which
+												-- the subscriber is interested in
+												-- receiving vehicle situation data
+												-- from, Elevation is omitted
+}
+
+DataSubscriptionResponse ::= SEQUENCE {
+	dialogID	SemiDialogID,				-- 0x9B Data Subscription
+	seqID		SemiSequenceID,				-- 0x09 Subscription Response
+	requestID	DSRC.TemporaryID,			-- matches requestID in DataSubscriptionRequest
+	subID		DSRC.TemporaryID, 			-- random 4 byte ID generated for this subscription
+	err			INTEGER (0..65535) OPTIONAL	-- Error Code if SubscriptionRequest 
+											-- fails (16 unsigned bits)
+}
+
+DataSubscriptionCancel ::= SEQUENCE {
+	dialogID	SemiDialogID,				-- 0x9B Data Subscription
+	seqID		SemiSequenceID,				-- 0x0A Subscription Request
+	requestID	DSRC.TemporaryID,			-- matches requestID in DataSubscriptionRequest
+	subID		DSRC.TemporaryID			-- matches subID in DataSubscriptionResponse
+}
+
+-- -_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_
+-- Advisory Situation Data Dialog
+-- -_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_
+
+-- ASDDepositRequest ::= Service Request
+-- ASDDepositRespose ::= Service Response
+
+AdvisorySituationData ::= SEQUENCE {
+	dialogID		SemiDialogID,					-- 0x9C Advisory Situation Data Deposit
+	seqID			SemiSequenceID,					-- 0x05 Data
+	requestID		DSRC.TemporaryID,				-- random 4 byte ID generated for data transfer
+	recordID		DSRC.TemporaryID	OPTIONAL,	-- used by the provider to overwrite existing record(s)
+	timeToLive		TimeToLive			OPTIONAL,	-- indicates how long the SDW should persist the record(s)
+	serviceRegion	GeoRegion,						-- NW and SE corners of the region applicable
+	asdmDetails		AdvisoryDetails
+}
+
+-- AdvisorySituationDataConfirmation ::= DataConfirmation
+
+-- AdvisorySituationDataAcceptance ::= DataAcceptance
+-- AdvisorySituationDataReceipt ::= DataReceipt
+
+
+-- -_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_
+-- Advisory Situation Data Distribution
+-- -_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_
+
+-- RsuServiceRequest ::= ServiceRequest
+-- RsuServiceResponse ::= ServiceResponse
+
+RsuAdvisorySituationDataRequest ::= SEQUENCE {
+	dialogID			SemiDialogID,				-- 0x9D ASDD
+	seqID				SemiSequenceID,				-- 0x03 Data Request
+	requestID			DSRC.TemporaryID,			-- random 4 byte ID generated for data transfer
+	serviceRegion		GeoRegion,					-- RSUs region of interest
+	timeBound 			INTEGER (1..30) OPTIONAL		-- maximum age in minutes of data to return
+}
+
+RsuAdvisorySituationDataBundle ::= SEQUENCE {
+	dialogID	SemiDialogID,											-- 0x9D ASDD
+	seqID		SemiSequenceID,											-- 0x05 Data
+	requestID	DSRC.TemporaryID,										-- random 4 byte ID generated for data transfer
+	recordCount	INTEGER(0..400),										-- number of total ASDM records to be returned
+	bundleCount	INTEGER(0..40),											-- number of bundles necessary to fulfill DataRequest
+	asdBundles	SEQUENCE (SIZE(0..4)) OF AdvisorySituationDataBundle	-- 
+}
+
+-- AdvisorySituationDataBundleAcceptance ::= DataAcceptance
+-- AdvisorySituationDataBundleReceipt ::= DataReceipt
+
+
+-- -_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_
+-- Intersection Situation Data Deposit
+-- -_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_
+
+-- IntersectionSituationDataDepositServiceRequest ::= ServiceRequest
+-- IntersectionSituationDataDepositServiceResponse ::= ServiceResponse
+
+IntersectionSituationData ::= SEQUENCE {
+	dialogID			SemiDialogID,					-- 0xA2 Intersection Situation Data Deposit
+	seqID				SemiSequenceID,					-- 0x05 Data
+	requestID			DSRC.TemporaryID,				-- random 4 byte ID generated for data transfer
+	bundleNumber		INTEGER(1..32767),				-- cumulative count of bundles sent this session
+	timeToLive			TimeToLive			OPTIONAL,	-- indicates how long the SDW should persist the record(s)
+	serviceRegion		GeoRegion,						-- NW and SE corners of the region applicable
+	intersectionRecord	IntersectionRecord				-- A Map/SPaT pair
+}
+
+IntersectionSituationDataAcceptance ::= SEQUENCE {
+	dialogID	SemiDialogID,				-- 0xA2 Intersection Situation Data Deposit
+	seqID		SemiSequenceID,				-- 0x06 Data Acceptance
+	requestID	DSRC.TemporaryID, 			-- matches reqID in dialog
+	recordsSent	INTEGER (1..32767)			-- total number of records sent this session
+}
+
+-- IntersectionSituationDataReceipt ::= DataReceipt
+
+
+-- -_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_
+-- Intersection Situation Data Query
+-- -_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_
+
+-- IntersectionSituationDataQueryServiceRequest ::= ServiceRequest
+-- IntersectionSituationDataQueryServiceResponse ::= ServiceResponse
+
+IntersectionSituationDataRequest ::= SEQUENCE {
+	dialogID			SemiDialogID,				-- 0xA3 ASDD
+	seqID				SemiSequenceID,				-- 0x03 Data Request
+	requestID			DSRC.TemporaryID,			-- random 4 byte ID generated for data transfer
+	serviceRegion		GeoRegion,					-- region of interest
+	timeBound 			INTEGER (1..30) OPTIONAL		-- maximum age in minutes of data to return
+}
+
+IntersectionSituationDataBundle ::= SEQUENCE {
+	dialogID	SemiDialogID,											-- 0xA3 ASDD
+	seqID		SemiSequenceID,											-- 0x05 Data
+	requestID	DSRC.TemporaryID,										-- random 4 byte ID generated for data transfer
+	recordCount	INTEGER(0..300),										-- number of total ISD records to be returned
+	bundleCount	INTEGER(0..60),											-- number of bundles necessary to fulfill DataRequest
+	isdBundles	SEQUENCE (SIZE(0..5)) OF IntersectionBundle				-- A collection of IntersectionRecords
+}
+
+-- IntersectionSituationDataBundleAcceptance ::= DataAcceptance
+-- IntersectionSituationDataBundleReceipt ::= DataReceipt
+
+-- -_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_
+-- Data Frames
+-- -_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_
+
+ServiceRecord ::= SEQUENCE {
+	connectionPoints	SEQUENCE (SIZE(1..2)) OF ConnectionPoint,
+	svcProvider			ServiceProviderID,
+	svcPSIDs			SEQUENCE (SIZE(1..5)) OF Psid,
+	serviceRegion		GeoRegion
+}
+
+ConnectionPoint ::= SEQUENCE {
+	address	IpAddress	OPTIONAL,
+	port	PortNumber
+}
+
+GeoRegion ::= SEQUENCE {
+	nwCorner	DSRC.Position3D,		-- Northwest corner
+	seCorner	DSRC.Position3D			-- Southeast corner
+}
+
+IpAddress ::= CHOICE {
+	ipv4Address	IPv4Address,
+	ipv6Address	IPv6Address
+}
+
+VehSitRecord ::= SEQUENCE {
+	tempID		DSRC.TemporaryID,
+	time		DSRC.DDateTime,						-- time at which this record was created
+	pos			DSRC.Position3D,					-- latitude, longitude, elevation of the vehicle when this record was created
+	fundamental	FundamentalSituationalStatus,		-- core data that is always required
+	vehstat		VehicleSituationStatus	OPTIONAL,	-- optional additional vehicle data
+	weather		Weather		OPTIONAL,				-- as observed by vehicle sensors
+	env			Environmental 	OPTIONAL,			-- as observed by vehicle sensors
+	elveh		ElectricVeh 	OPTIONAL			-- data relating to vehicle 
+													-- status unique to Electric 
+													-- Vehicles (state of charge, range, etc.)
+}
+
+FundamentalSituationalStatus ::= SEQUENCE {
+	speed			DSRC.TransmissionAndSpeed,		-- from BSM Part I
+	heading			DSRC.Heading,					-- from BSM Part I
+	steeringAngle	DSRC.SteeringWheelAngle, 		-- from BSM Part I
+	accelSet		DSRC.AccelerationSet4Way,		-- from BSM Part I
+	brakes			DSRC.BrakeSystemStatus,			-- from BSM Part I
+	vehSize			DSRC.VehicleSize				-- from BSM Part I
+}
+
+Weather ::= SEQUENCE {
+	
+	wipers SEQUENCE {
+		statFrnt	DSRC.WiperStatusFront,
+		rateFrnt	DSRC.WiperRate		OPTIONAL,
+		statRear	DSRC.WiperStatusRear	OPTIONAL,
+		rateRear	DSRC.WiperRate 		OPTIONAL
+	} OPTIONAL,
+	airTemp		DSRC.AmbientAirTemperature	OPTIONAL,
+	airPres		DSRC.AmbientAirPressure 	OPTIONAL,
+	weatherReport SEQUENCE {    
+		isRaining        NTCIP.EssPrecipYesNo,
+		rainRate         NTCIP.EssPrecipRate       OPTIONAL,
+		precipSituation  NTCIP.EssPrecipSituation  OPTIONAL,
+		solarRadiation   NTCIP.EssSolarRadiation   OPTIONAL,
+		friction         NTCIP.EssMobileFriction   OPTIONAL
+	} OPTIONAL,
+	...	-- # Additional Data Elements
+}
+
+VehicleSituationStatus ::=  SEQUENCE {
+	lights			DSRC.ExteriorLights,
+	throttlePos		DSRC.ThrottlePosition		OPTIONAL,
+	tirePressure	SEQUENCE {
+		leftFront	DSRC.TirePressure,
+		leftRear	DSRC.TirePressure,
+		rightFront	DSRC.TirePressure,
+		rightRear	DSRC.TirePressure
+	}	OPTIONAL,
+	... -- # Additional Data Elements
+}
+
+Environmental ::= SEQUENCE {	
+	fuelCon		FuelConsumption,	--new, definition is TBD
+	emiss		Emissions,			--new, definition is TBD
+	fuelEcon	FuelEconomy,		--new, definition is TBD
+	... -- # Additional Data Elements
+} 
+
+ElectricVeh ::= SEQUENCE {
+	soc		StateOfCharge,	-- new, TBD; Veh Battery State of Charge
+	cap		Capacity,		-- new, TBD; Capacity of the Veh Battery
+	range	Range,		-- new, TBD; driving range of veh based on soc
+	... -- # Additional Data Elements
+}
+
+AdvisoryDetails ::= SEQUENCE {
+	asdmID			DSRC.TemporaryID,
+	asdmType		AdvisoryBroadcastType,
+	distType		DistributionType,
+	startTime		DSRC.DFullTime	OPTIONAL,
+	stopTime		DSRC.DFullTime	OPTIONAL,
+	advisoryMessage	OCTET STRING (SIZE(0..1400))	-- Encoded advisory message
+}
+
+
+RSUAdvisoryBroadcast ::= SEQUENCE {
+	broadcastInst	BroadcastInstructions,			-- RSU broadcast instructions
+	advisoryMessage	OCTET STRING (SIZE(0..1400))	-- Encoded advisory message
+}
+
+BroadcastInstructions ::= SEQUENCE {
+	biType			AdvisoryBroadcastType,
+	biPsid			Psid,
+	biPriority		DSRC.Priority,
+	biTxMode		TxMode,
+	biTxChannel		TxChannel,
+	biTxInterval	INTEGER(0..50),	-- units of 1/10 second
+	biDeliveryStart	DSRC.DFullTime,
+	biDelievryStop	DSRC.DFullTime,
+	biSignature		BOOLEAN,
+	biEncryption	BOOLEAN
+}
+
+AdvisorySituationDataBundle ::= SEQUENCE {
+	bundleNumber	INTEGER(1..40),
+	bundleId		DSRC.TemporaryID,
+	asdRecords		SEQUENCE (SIZE(1..10)) OF RSUAdvisoryBroadcast
+}
+
+IntersectionBundle ::= SEQUENCE {
+	bundleNumber	INTEGER(1..60),
+	bundleId		DSRC.TemporaryID,
+	isdRecords		SEQUENCE (SIZE(1..5)) OF IntersectionRecord
+}
+
+IntersectionRecord ::= SEQUENCE {
+	mapData		DSRC.MapData,
+	spatData	SpatRecord
+}
+
+SpatRecord ::= SEQUENCE {
+	timestamp		DSRC.DDateTime,			-- time at which the record was generated
+	intersections	DSRC.IntersectionState	-- J2735 IntersectionState
+}
+
+-- -_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_
+-- Data Elements
+-- -_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_
+
+SemiDialogID ::= ENUMERATED {
+	vehSitData					(154),  -- 0x9A Vehicle Situation Data Deposit
+	dataSubscription			(155),	-- 0x9B Data Subscription
+	advSitDataDep				(156),	-- 0x9C Advisory Situation Data Deposit
+	advSitDatDistRSE			(157),	-- 0x9D Advisory Situation Data Distribution
+	reserved1					(158),	-- 0x9E 
+	reserved2					(159),	-- 0x9F 
+	objReg						(160),	-- 0xA0 Object Registration
+	objDisc						(161),	-- 0xA1 Object Discovery
+	intersectionSitDataDep		(162),	-- 0xA2 Intersection Situation Data Deposit
+	intersectionSitDataQuery	(163),	-- 0xA3 Intersection Situation Data Query
+	... -- additional DialogIDs
+}
+
+SemiSequenceID ::= ENUMERATED {
+	svcReq				(1),	-- Service request
+	svcResp				(2),	-- Service response
+	dataReq				(3),	-- Data request
+	dataConf			(4),	-- Data confirmation
+	data				(5),	-- Data 
+	accept				(6),	-- Acceptance
+	receipt				(7),	-- Receipt
+	subscriptionReq		(8),	-- Subscription Request
+	subscriptinoResp	(9),	-- Subscription Response
+	subscriptionCancel	(10),	-- Subscription Cancellation
+	... -- additional SeqIDs
+}
+
+ServiceID ::= OCTET STRING (SIZE(1))
+	--	sdc				(1),	"00000001", Situation Data Clearing House
+	--	sdw				(2),	"00000010", Situation Data Warehouse
+	--	scms			(4),	"00000100", Security Credential Management System
+	--	other			(8)		"00001000", reserved
+
+
+VsmType ::= OCTET STRING (SIZE(1))
+	--	fund	(1),	"00000001", VehSitRcd that only contains the fundamental data elements	
+	--	vehstat	(2),	"00000010", VehSitRcd that contains the VehicleStatus Data Frame
+	--	weather	(4),	"00000100", VehSitRcd that contains Weather Data
+	--	env		(8),	"00001000", VehSitRcd that contains Environmental data
+	--	elveh	(16)	"00010000", VehSitRcd that contains Electric Vehicle data
+
+IsdType ::= OCTET STRING (SIZE(1))
+	--	fund	(1)		"00000001"
+
+IPv4Address ::= OCTET STRING(SIZE(4))
+
+IPv6Address ::= OCTET STRING(SIZE(16))
+
+PortNumber ::= INTEGER(0..65535)
+
+ServiceProviderID ::= OCTET STRING(SIZE(4))
+
+Sha256Hash ::=	OCTET STRING (SIZE(32))
+
+Psid ::= OCTET STRING(SIZE(4))
+
+AdvisoryBroadcastType ::= ENUMERATED {
+	spatAggregate	(0),
+	map				(1),
+	tim				(2),
+	ev				(3),
+	... -- additional message types
+}
+
+DistributionType ::= OCTET STRING (SIZE(1))
+	--	rsu			(1),	"00000001",  
+	--	ip			(2),	"00000010",  
+	--	satellite	(4),	"00000100", 
+	--	reserved	(8)		"00001000" 
+
+TimeToLive ::= ENUMERATED {
+	minute		(0),
+	halfHour	(1),
+	day			(2),
+	week		(3),
+	month		(4),
+	year		(5)
+}
+
+TxMode ::= ENUMERATED {
+	continuous	(0),
+	alternating	(1)
+}
+
+TxChannel ::= ENUMERATED {
+	chControl,
+	chService,
+	ch172,
+	ch174,
+	ch176,
+	ch178,
+	ch180,
+	ch182,
+	ch184
+}
+
+-- TEMP VSDM definitions below
+-- Environmental
+FuelConsumption ::= INTEGER (0..255) 
+Emissions ::= INTEGER (0..255) 
+FuelEconomy ::= INTEGER (0..255) 
+-- Electric Vehicle
+StateOfCharge ::= INTEGER (0..255) 
+Capacity ::= INTEGER (0..255) 
+Range ::= INTEGER (0..255) 
+
+END
+-- END of SEMI module
